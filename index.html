@@ -176,7 +176,7 @@
         }
         
         async function fetchStationData(stationId) {
-            const url = `http://lapi.transitchicago.com/api/1.0/ttarrivals.aspx?key=${CTA_API_KEY}&mapid=${stationId}&outputType=JSON`;
+            const url = `https://lapi.transitchicago.com/api/1.0/ttarrivals.aspx?key=${CTA_API_KEY}&mapid=${stationId}&outputType=JSON`;
             const response = await fetch(url);
             const data = await response.json();
             return data.ctatt.eta;
