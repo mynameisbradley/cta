@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chicago Transit Dashboard</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .time {
+            font-size: 3em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+        
+        .date {
+            font-size: 1.2em;
+            opacity: 0.8;
+            margin-bottom: 20px;
+        }
+        
+        .station {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .station-name {
+            font-size: 1.5em;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .line-icon {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            margin-right: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.8em;
+        }
+        
+        .brown { background: #62361B; }
+        .red { background: #c60c30; }
+        
+        .direction {
+            margin-bottom: 15px;
+        }
+        
+        .direction-name {
+            font-size: 1.1em;
+            opacity: 0.9;
+            margin-bottom: 8px;
+        }
+        
+        .arrivals {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .arrival {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+        
+        .arrival.approaching {
+            background: #ff6b35;
+            animation: pulse 1s ease-in-out infinite alternate;
+        }
+        
+        @keyframes pulse {
+            from { opacity: 1; }
+            to { opacity: 0.7; }
+        }
+        
+        .loading {
+            text-align: center;
+            font-size: 1.2em;
+            opacity: 0.7;
+        }
+        
+        .error {
+            background: rgba(255, 0, 0, 0.2);
+            border: 1px solid rgba(255, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        
+        .last-updated {
+            text-align: center;
+            font-size: 0.9em;
+            opacity: 0.6;
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="time" id="current-time"></div>
+            <div class="date" id="current-date"></div>
+        </div>
+        
+        <div id="transit-data">
+            <div class="loading">Loading transit data...</div>
+        </div>
+        
+        <div class="last-updated" id="last-updated"></div>
+    </div>
+
+    <script>
+        // Replace with your actual CTA API key
+        const CTA_API_KEY = 'YOUR_API_KEY_HERE';
+        
+        // Station IDs
+        const STATIONS = {
+            brown: 41180,  // Armitage Brown Line
+            red: 40650     // North/Clybourn Red Line
+        };
+        
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('current-time').textContent = now.toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            document.getElementById('current-date').textContent = now.toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        }
+        
+        function calculateMinutesUntil(arrivalTime) {
+            const now = new Date();
+            const arrival = new Date(arrivalTime);
+            const diffMs = arrival - now;
+            const diffMins = Math.round(diffMs / (1000 * 60));
+            return Math.max(0, diffMins);
+        }
+        
+        function formatArrival(minutes) {
+            if (minutes === 0) return 'Now';
+            if (minutes === 1) return '1 min';
+            return `${minutes} min`;
+        }
+        
+        async function fetchStationData(stationId) {
+            const url = `http://lapi.transitchicago.com/api/1.0/ttarrivals.aspx?key=${CTA_API_KEY}&mapid=${stationId}&outputType=JSON`;
+            const response = await fetch(url);
+            const data = await response.json();
+            return data.ctatt.eta;
+        }
+        
+        function groupByDirection(arrivals) {
+            const grouped = {};
+            arrivals.forEach(arrival => {
+                const direction = arrival.destNm;
+                if (!grouped[direction]) {
+                    grouped[direction] = [];
+                }
+                grouped[direction].push(arrival);
+            });
+            
+            // Sort by arrival time and take first 3
+            Object.keys(grouped).forEach(direction => {
+                grouped[direction] = grouped[direction]
+                    .sort((a, b) => new Date(a.arrT) - new Date(b.arrT))
+                    .slice(0, 3);
+            });
+            
+            return grouped;
+        }
+        
+        function renderStation(stationName, lineColor, arrivals) {
+            const grouped = groupByDirection(arrivals);
+            
+            let html = `
+                <div class="station">
+                    <div class="station-name">
+                        <div class="line-icon ${lineColor}">${lineColor === 'brown' ? 'Brn' : 'Red'}</div>
+                        ${stationName}
+                    </div>
+            `;
+            
+            Object.entries(grouped).forEach(([direction, trains]) => {
+                html += `
+                    <div class="direction">
+                        <div class="direction-name">→ ${direction}</div>
+                        <div class="arrivals">
+                `;
+                
+                trains.forEach(train => {
+                    const minutes = calculateMinutesUntil(train.arrT);
+                    const arrivalClass = minutes <= 1 ? 'arrival approaching' : 'arrival';
+                    html += `<div class="${arrivalClass}">${formatArrival(minutes)}</div>`;
+                });
+                
+                html += `
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            return html;
+        }
+        
+        async function updateTransitData() {
+            try {
+                const [brownData, redData] = await Promise.all([
+                    fetchStationData(STATIONS.brown),
+                    fetchStationData(STATIONS.red)
+                ]);
+                
+                let html = '';
+                html += renderStation('Armitage', 'brown', brownData);
+                html += renderStation('North/Clybourn', 'red', redData);
+                
+                document.getElementById('transit-data').innerHTML = html;
+                document.getElementById('last-updated').textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+                
+            } catch (error) {
+                document.getElementById('transit-data').innerHTML = `
+                    <div class="error">
+                        Error loading transit data. Please check your API key and internet connection.
+                    </div>
+                `;
+                console.error('Error fetching transit data:', error);
+            }
+        }
+        
+        // Initialize
+        updateTime();
+        updateTransitData();
+        
+        // Update time every second
+        setInterval(updateTime, 1000);
+        
+        // Update transit data every 30 seconds
+        setInterval(updateTransitData, 30000);
+    </script>
+</body>
+</html>
