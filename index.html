@@ -139,7 +139,7 @@
 
     <script>
         // Replace with your actual CTA API key
-        const CTA_API_KEY = 'adb08d82825046e79af0069a3c10b6b2';
+        const CTA_API_KEY = 'YOUR_API_KEY_HERE';
         
         // Station IDs
         const STATIONS = {
@@ -176,7 +176,7 @@
         }
         
         async function fetchStationData(stationId) {
-            const url = `https://lapi.transitchicago.com/api/1.0/ttarrivals.aspx?key=${CTA_API_KEY}&mapid=${stationId}&outputType=JSON`;
+            const url = `https://cors-anywhere.herokuapp.com/https://lapi.transitchicago.com/api/1.0/ttarrivals.aspx?key=${CTA_API_KEY}&mapid=${stationId}&outputType=JSON`;
             const response = await fetch(url);
             const data = await response.json();
             return data.ctatt.eta;
